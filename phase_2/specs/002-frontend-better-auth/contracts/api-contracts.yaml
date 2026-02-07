@@ -1,0 +1,712 @@
+openapi: 3.1.0
+info:
+  title: Todo Frontend API Contracts
+  description: |
+    API contract definitions for the Todo Frontend application.
+
+    This document defines the contracts between:
+    1. Frontend ↔ Better Auth (Authentication endpoints)
+    2. Frontend ↔ FastAPI Backend (Task management endpoints)
+
+    **Authentication Flow**:
+    - Better Auth handles signup/login and issues JWT tokens
+    - JWT tokens stored in HttpOnly cookies or localStorage
+    - All backend API requests include: `Authorization: Bearer <token>`
+
+    **User Isolation**:
+    - Backend automatically filters tasks by user_id from JWT token
+    - Frontend never sends user_id explicitly in requests
+  version: 1.0.0
+  contact:
+    name: Phase 2 Development Team
+
+servers:
+  - url: http://localhost:3000
+    description: Frontend Next.js development server
+  - url: http://localhost:8000
+    description: Backend FastAPI development server
+
+tags:
+  - name: Authentication
+    description: Better Auth authentication endpoints
+  - name: Tasks
+    description: Task management CRUD operations (FastAPI backend)
+
+paths:
+  # ============================================================================
+  # Authentication Endpoints (Better Auth)
+  # ============================================================================
+
+  /api/auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Create new user account
+      description: |
+        Register a new user with email and password.
+        Returns user object and JWT session tokens.
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            examples:
+              validSignup:
+                summary: Valid signup request
+                value:
+                  email: user@example.com
+                  password: SecurePass123!
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+          headers:
+            Set-Cookie:
+              description: JWT tokens in HttpOnly cookies
+              schema:
+                type: string
+        '400':
+          description: Invalid input (email already exists, weak password)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+              examples:
+                emailExists:
+                  summary: Email already registered
+                  value:
+                    error: Email already exists
+                weakPassword:
+                  summary: Password too weak
+                  value:
+                    error: Password must be at least 8 characters
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate existing user
+      description: |
+        Login with email and password credentials.
+        Returns user object and JWT session tokens.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              validLogin:
+                summary: Valid login request
+                value:
+                  email: user@example.com
+                  password: SecurePass123!
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+          headers:
+            Set-Cookie:
+              description: JWT tokens in HttpOnly cookies
+              schema:
+                type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+              examples:
+                invalidCredentials:
+                  summary: Wrong email or password
+                  value:
+                    error: Invalid email or password
+
+  /api/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: End user session
+      description: |
+        Logout current user by clearing session tokens.
+        Requires active session.
+      operationId: logout
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+          headers:
+            Set-Cookie:
+              description: Clear JWT cookies
+              schema:
+                type: string
+        '401':
+          description: No active session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+
+  /api/auth/session:
+    get:
+      tags: [Authentication]
+      summary: Get current session
+      description: |
+        Retrieve current user session information.
+        Used for session persistence and validation.
+      operationId: getSession
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Session retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          description: No active session or token expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorResponse'
+
+  # ============================================================================
+  # Task Management Endpoints (FastAPI Backend)
+  # ============================================================================
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List all tasks for authenticated user
+      description: |
+        Retrieve all tasks belonging to the authenticated user.
+        Results are automatically filtered by user_id from JWT token.
+        Supports pagination via limit and offset parameters.
+      operationId: listTasks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of tasks to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Number of tasks to skip (for pagination)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+              examples:
+                withTasks:
+                  summary: User with tasks
+                  value:
+                    - id: 1
+                      title: Complete project documentation
+                      description: Write comprehensive docs
+                      status: in_progress
+                      user_id: user-123
+                      created_at: "2026-02-05T10:00:00Z"
+                      updated_at: "2026-02-05T11:30:00Z"
+                    - id: 2
+                      title: Review pull requests
+                      description: null
+                      status: pending
+                      user_id: user-123
+                      created_at: "2026-02-05T12:00:00Z"
+                      updated_at: "2026-02-05T12:00:00Z"
+                emptyList:
+                  summary: User with no tasks
+                  value: []
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags: [Tasks]
+      summary: Create a new task
+      description: |
+        Create a new task for the authenticated user.
+        The user_id is automatically set from the JWT token.
+      operationId: createTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateRequest'
+            examples:
+              minimal:
+                summary: Minimal task (title only)
+                value:
+                  title: Buy groceries
+              full:
+                summary: Full task with all fields
+                value:
+                  title: Prepare presentation
+                  description: Create slides for client meeting
+                  status: in_progress
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/tasks/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        description: Unique task identifier
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags: [Tasks]
+      summary: Get task by ID
+      description: |
+        Retrieve a specific task by ID.
+        Returns 404 if task doesn't exist or belongs to another user.
+      operationId: getTask
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Task retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags: [Tasks]
+      summary: Update task
+      description: |
+        Update an existing task.
+        Only provided fields are updated (partial update).
+        Returns 404 if task doesn't exist or belongs to another user.
+      operationId: updateTask
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdateRequest'
+            examples:
+              statusOnly:
+                summary: Update status only
+                value:
+                  status: completed
+              titleAndDescription:
+                summary: Update title and description
+                value:
+                  title: Updated task title
+                  description: Updated description
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags: [Tasks]
+      summary: Delete task
+      description: |
+        Permanently delete a task.
+        Returns 404 if task doesn't exist or belongs to another user.
+      operationId: deleteTask
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Task deleted successfully (no content)
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+# ============================================================================
+# Reusable Components
+# ============================================================================
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from Better Auth
+
+  schemas:
+    # Authentication Schemas
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          example: SecurePass123!
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: SecurePass123!
+        rememberMe:
+          type: boolean
+          default: false
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - emailVerified
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: user-123
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          nullable: true
+          example: John Doe
+        emailVerified:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-02-05T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-02-05T10:00:00Z"
+
+    Session:
+      type: object
+      required:
+        - user
+        - accessToken
+        - expiresAt
+        - issuedAt
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        accessToken:
+          type: string
+          description: JWT access token (short-lived)
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refreshToken:
+          type: string
+          nullable: true
+          description: JWT refresh token (long-lived, HttpOnly cookie)
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-02-05T11:00:00Z"
+        issuedAt:
+          type: string
+          format: date-time
+          example: "2026-02-05T10:00:00Z"
+
+    AuthSuccessResponse:
+      type: object
+      required:
+        - user
+        - session
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          $ref: '#/components/schemas/Session'
+
+    SessionResponse:
+      type: object
+      required:
+        - session
+      properties:
+        session:
+          $ref: '#/components/schemas/Session'
+
+    LogoutResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    AuthErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: Invalid email or password
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    # Task Schemas
+    TaskStatus:
+      type: string
+      enum:
+        - pending
+        - in_progress
+        - completed
+      example: pending
+
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - user_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Complete project documentation
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+          example: Write comprehensive documentation for the project
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        user_id:
+          type: string
+          description: Owner user ID (set automatically from JWT)
+          example: user-123
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-05T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-02-05T11:30:00Z"
+
+    TaskCreateRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Buy groceries
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+          example: Milk, eggs, bread
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+          default: pending
+
+    TaskUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+
+    # Error Schemas
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: An error occurred
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  type: string
+              msg:
+                type: string
+              type:
+                type: string
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or token expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              summary: Missing JWT token
+              value:
+                detail: Not authenticated
+            expiredToken:
+              summary: Expired JWT token
+              value:
+                detail: Token expired
+            invalidToken:
+              summary: Invalid JWT token
+              value:
+                detail: Invalid token
+
+    NotFoundError:
+      description: Resource not found or user lacks permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            taskNotFound:
+              summary: Task not found
+              value:
+                detail: Task not found
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+          examples:
+            invalidTitle:
+              summary: Title validation error
+              value:
+                detail:
+                  - loc: ["body", "title"]
+                    msg: "ensure this value has at least 1 character"
+                    type: "value_error.any_str.min_length"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            generic:
+              summary: Generic server error
+              value:
+                detail: Internal server error
