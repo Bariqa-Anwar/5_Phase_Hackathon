@@ -7,7 +7,7 @@ import {
   TaskListResponse,
 } from "@/types/task";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://bariqa-todo-app.hf.space";
 
 // Cache the JWT to avoid calling the token bridge on every request
 let cachedToken: string | null = null;

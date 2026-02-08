@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from jose import jwt
 from fastapi.testclient import TestClient
-from main import app
+from phase_2.backend.main import app
 
 # Load environment variables
 env_path = Path(__file__).parent.parent / ".env"

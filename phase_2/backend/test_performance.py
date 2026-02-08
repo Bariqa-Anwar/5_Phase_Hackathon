@@ -8,7 +8,7 @@ from jose import jwt
 
 # Measure startup time
 start_time = time.time()
-from main import app
+from phase_2.backend.main import app
 startup_time = time.time() - start_time
 
 print(f"Server startup time: {startup_time:.3f} seconds")

@@ -2,7 +2,7 @@
 Test to verify OpenAPI schema generation doesn't have recursion issues
 and properly caches the schema
 """
-from main import app
+from phase_2.backend.main import app
 
 print("Test 1: Initial schema generation")
 schema1 = app.openapi()

@@ -3,7 +3,7 @@ Test script to verify Task model by inserting and querying a test record
 """
 from datetime import datetime, UTC
 from sqlmodel import Session, select
-from db import engine
+from phase_2.backend.db import engine
 from models import Task, TaskStatus
 
 # Create a test task
